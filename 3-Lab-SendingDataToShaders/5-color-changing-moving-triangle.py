@@ -2,7 +2,6 @@ from OpenGL.GL import *
 from glfw.GLFW import *
 import glm
 import ctypes
-import numpy as np
 
 g_vertex_shader_src = '''
 #version 330 core
@@ -12,21 +11,13 @@ layout (location = 1) in vec3 vin_color;
 
 out vec4 vout_color;
 
-uniform mat3 M;
+uniform float xOffset;
+uniform vec3 colorOffset;
 
 void main()
 {
-    // 3D point in homogeneous coordinates
-    gl_Position = vec4(0, 0, 0, 1.0);
-
-    // 2D points in homogeneous coordinates
-    vec3 p2D_in_hcoord = vec3(vin_pos.x, vin_pos.y, 1.0);
-    vec3 p2D_new_in_hcoord = M * p2D_in_hcoord;
-
-    // setting x, y coordinate values of gl_Position
-    gl_Position.xy = p2D_new_in_hcoord.xy;
-
-    vout_color = vec4(vin_color, 1);
+    gl_Position = vec4(vin_pos.x + xOffset, vin_pos.y, vin_pos.z, 1.0);
+    vout_color = vec4(vin_color * colorOffset, 1);
 }
 '''
 
@@ -101,7 +92,7 @@ def main():
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE) # for macOS
 
     # create a window and OpenGL context
-    window = glfwCreateWindow(800, 800, '4-animating-transform', None, None)
+    window = glfwCreateWindow(800, 800, '5-color-changing-moving-triangle', None, None)
     if not window:
         glfwTerminate()
         return
@@ -114,15 +105,17 @@ def main():
     shader_program = load_shaders(g_vertex_shader_src, g_fragment_shader_src)
 
     # get uniform locations
-    M_loc = glGetUniformLocation(shader_program, 'M')
+    colorOffset_loc = glGetUniformLocation(shader_program, 'colorOffset')
+    xOffset_loc =  glGetUniformLocation(shader_program, 'xOffset')
     
     # prepare vertex data (in main memory)
     vertices = glm.array(glm.float32,
         # position        # color
-         0.0, 0.0, 0.0,  1.0, 0.0, 0.0, # v0
-         0.5, 0.0, 0.0,  0.0, 1.0, 0.0, # v1
-         0.0, 0.5, 0.0,  0.0, 0.0, 1.0, # v2
+        -0.5, -0.5, 0.0,  1.0, 0.0, 0.0, # left vertex
+         0.5, -0.5, 0.0,  0.0, 1.0, 0.0, # right vertex
+         0.0,  0.5, 0.0,  0.0, 0.0, 1.0, # top vertex
     )
+
 
     # create and activate VAO (vertex array object)
     VAO = glGenVertexArrays(1)  # create a vertex array object ID and store it to VAO variable
@@ -150,32 +143,13 @@ def main():
 
         glUseProgram(shader_program)
 
-
-        # animating
+        # update uniforms
         t = glfwGetTime()
-
-        # rotation 30 deg
-        th = np.radians(t*90)
-        R = np.array([[np.cos(th), -np.sin(th), 0.],
-                      [np.sin(th),  np.cos(th), 0.],
-                      [0.,         0.,          1.]])
-
-        # tranlation by (.5, .2)
-        T = np.array([[1., 0., np.sin(t)],
-                      [0., 1., .2],
-                      [0., 0., 1.]])
-
-        # M = R
-        # M = T
-        M = R @ T   # '@' is matrix-matrix / matrix-vector multiplication operator
-        # M = T @ R
-
-        # print(M)
-            
-        # note that 'transpose' (3rd parameter) is set to GL_TRUE
-        # because numpy array is row-major.
-        glUniformMatrix3fv(M_loc, 1, GL_TRUE, M)
-
+        move = glm.sin(t)
+        colorchange = (glm.sin(t)+1) * .5
+        glUniform3f(colorOffset_loc, colorchange, colorchange, colorchange)
+        glUniform1f(xOffset_loc, move)
+        
 
         glBindVertexArray(VAO)
         glDrawArrays(GL_TRIANGLES, 0, 3)
